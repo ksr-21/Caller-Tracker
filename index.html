@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caller Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{--bg:#f4f6fa;--card:#fff;--text:#1d2433;--muted:#6b7385;--line:#e3e7ef;--brand:#2563eb;--brand-soft:#eef2ff;
+    --green:#16a34a;--amber:#d97706;--red:#dc2626;--gray:#64748b;--purple:#7c3aed}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+  .hidden{display:none !important}
+  input,select,button{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--text)}
+  button{cursor:pointer}
+  button:disabled{opacity:.6;cursor:default}
+  .btn{background:var(--brand);color:#fff;border:none}
+  .btn.light{background:var(--brand-soft);color:var(--brand)}
+  .btn.danger{background:#fee2e2;color:var(--red);border:none}
+  label.file{background:var(--brand);color:#fff;padding:8px 12px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+  label.file input{display:none}
+  .wrap{max-width:1100px;margin:0 auto}
+  .meta{color:var(--muted);font-size:13px;margin-top:2px}
+  .err{background:#fee2e2;color:#991b1b;padding:10px 12px;border-radius:8px;font-size:14px;margin-bottom:12px}
+
+  /* Auth screens */
+  .authPage{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+  .authCard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px;width:100%;max-width:380px}
+  .authCard h2{margin:0 0 4px}
+  .authCard input{width:100%;margin-top:10px}
+  .authCard .btn{width:100%;margin-top:14px;padding:10px}
+
+  /* Header */
+  header{background:var(--card);border-bottom:1px solid var(--line);padding:12px 16px;position:sticky;top:0;z-index:5}
+  .top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  h1{font-size:20px;margin:0 auto 0 0}
+  .who{font-size:14px;color:var(--muted);white-space:nowrap}
+  .who b{color:var(--text)}
+  .role{font-size:11px;font-weight:700;text-transform:uppercase;background:var(--brand-soft);color:var(--brand);padding:2px 6px;border-radius:6px;margin-left:4px}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .menuBtn{display:none}
+  .tabs{display:flex;gap:4px;margin-top:4px;flex-basis:100%}
+  .tab{border:none;background:none;padding:8px 14px;border-radius:8px;color:var(--muted);font-weight:600}
+  .tab.active{background:var(--brand-soft);color:var(--brand)}
+
+  main{padding:16px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:14px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer}
+  .stat b{display:block;font-size:24px}
+  .stat span{color:var(--muted);font-size:13px}
+  .stat.active{outline:2px solid var(--brand)}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .filters input{flex:1;min-width:180px}
+  .bulk{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:12px}
+  .bulk .count{font-weight:600;margin-right:auto}
+  .chk{display:flex;align-items:center;gap:6px;font-size:14px;white-space:nowrap}
+  .chk input{width:18px;height:18px;min-height:auto;margin:0}
+
+  /* Lead cards */
+  .list{display:flex;flex-direction:column;gap:10px}
+  .row{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:10px;padding:12px;
+    display:grid;grid-template-columns:1.4fr auto 1fr 1fr 1.4fr;gap:10px;align-items:center}
+  .row .adm{grid-column:1/-1;display:flex;gap:10px;align-items:center;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+  .row .adm select{flex:0 1 240px}
+  .row.sel{outline:2px solid var(--brand)}
+  .row.s-Interested{border-left-color:var(--green)}
+  .row.s-Follow{border-left-color:var(--amber)}
+  .row.s-Not{border-left-color:var(--red)}
+  .row.s-No{border-left-color:var(--gray)}
+  .row.s-Converted{border-left-color:var(--purple)}
+  .row.due{background:#fffbeb}
+  .row .info{min-width:0}
+  .name{font-weight:600;overflow-wrap:anywhere}
+  .call{background:var(--green);color:#fff;text-decoration:none;padding:9px 14px;border-radius:8px;font-weight:600;white-space:nowrap;text-align:center}
+  .row select,.row input:not([type=checkbox]){width:100%}
+  .tag{font-size:12px;color:var(--amber);font-weight:600}
+  .cat{display:inline-block;font-size:12px;font-weight:600;background:var(--brand-soft);color:var(--brand);padding:2px 8px;border-radius:999px;margin-left:4px;vertical-align:middle}
+  .empty{text-align:center;padding:40px 16px;color:var(--muted);background:var(--card);border:1px dashed var(--line);border-radius:12px}
+  .more{display:block;margin:12px auto}
+
+  /* Tables */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  .card h3{margin:0 0 12px;font-size:16px}
+  .tbl{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--muted);font-weight:600;font-size:12px}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+  .pill{font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+  .pill.on{background:#dcfce7;color:#166534}
+  .pill.off{background:#fee2e2;color:#991b1b}
+  .formRow{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px}
+  .feed{font-size:14px;max-height:340px;overflow:auto}
+  .feed div{padding:7px 0;border-bottom:1px solid var(--line)}
+
+  /* Modal + toast */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+  .modal.show{display:flex}
+  .box{background:#fff;border-radius:12px;padding:18px;max-width:460px;width:100%;max-height:90vh;overflow:auto}
+  .box h3{margin-top:0}
+  .box .field{margin-bottom:10px}
+  .box .field label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
+  .box select{width:100%}
+  .box .btn{width:100%;margin-top:6px;padding:10px}
+  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1d2433;color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20;max-width:90vw;text-align:center}
+  .toast.show{opacity:1}
+  .toast.err{background:var(--red)}
+
+  @media (max-width:800px){
+    input,select,button{font-size:16px;min-height:44px}
+    header{padding:10px 12px}
+    h1{font-size:18px;flex:1}
+    .who{order:3;width:100%}
+    .menuBtn{display:block;background:var(--brand-soft);color:var(--brand);border:none;font-size:20px;padding:0 14px}
+    .actions{display:none;order:4;width:100%;grid-template-columns:1fr 1fr;gap:8px}
+    header.open .actions{display:grid}
+    .actions > *{width:100%;min-height:44px}
+    .tabs{order:5;width:100%}
+    .tab{flex:1;min-height:40px}
+    main{padding:12px}
+    .stats{display:flex;overflow-x:auto;gap:8px;margin:0 -12px 12px;padding:2px 12px;scrollbar-width:none}
+    .stats::-webkit-scrollbar{display:none}
+    .stat{flex:0 0 auto;min-width:96px;padding:10px 12px}
+    .stat b{font-size:20px}
+    .filters{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .filters input{grid-column:1/-1;min-width:0}
+    .filters select{min-width:0;width:100%}
+    .bulk select,.bulk button{flex:1 1 45%}
+    .bulk .count{flex-basis:100%}
+    .row{grid-template-columns:1fr 1fr auto;grid-template-areas:"info info call" "st dt dt" "nt nt nt";gap:8px}
+    .row.admin{grid-template-areas:"adm adm adm" "info info call" "st dt dt" "nt nt nt"}
+    .row .adm{grid-area:adm}
+    .row .info{grid-area:info}
+    .row .call{grid-area:call;align-self:start;padding:12px 16px;font-size:16px}
+    .row .st{grid-area:st;min-width:0}
+    .row .dt{grid-area:dt;min-width:0}
+    .row .nt{grid-area:nt}
+    .formRow{grid-template-columns:1fr}
+    .modal{align-items:flex-end;padding:0}
+    .box{border-radius:16px 16px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom))}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ LOADING ============ -->
+<div id="bootScreen" class="authPage"><div class="meta">Loading…</div></div>
+
+<!-- ============ LOGIN ============ -->
+<div id="loginScreen" class="authPage hidden">
+  <form class="authCard" id="loginForm">
+    <h2>📞 Caller Tracker</h2>
+    <div class="meta">Sign in with the email and password your admin gave you.</div>
+    <div id="loginErr" class="err hidden" style="margin:12px 0 0"></div>
+    <input type="email" id="loginEmail" placeholder="Email" autocomplete="username" required>
+    <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" required>
+    <button class="btn" type="submit" id="loginBtn">Sign in</button>
+  </form>
+</div>
+
+<!-- ============ FIRST-TIME ADMIN SETUP ============ -->
+<div id="setupScreen" class="authPage hidden">
+  <form class="authCard" id="setupForm">
+    <h2>👋 First-time setup</h2>
+    <div class="meta">Create the admin account. This screen only appears once — after this, employees are added from inside the app.</div>
+    <div id="setupErr" class="err hidden" style="margin:12px 0 0"></div>
+    <input id="setupName" placeholder="Your name" required>
+    <input type="email" id="setupEmail" placeholder="Admin email" autocomplete="username" required>
+    <input type="password" id="setupPass" placeholder="Password (min 6 characters)" minlength="6" autocomplete="new-password" required>
+    <button class="btn" type="submit" id="setupBtn">Create admin account</button>
+  </form>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="appScreen" class="hidden">
+<header>
+  <div class="wrap top">
+    <h1>📞 Caller Tracker</h1>
+    <button class="menuBtn" id="menuBtn" aria-label="Menu">☰</button>
+    <div class="who">👤 <b id="whoName"></b><span class="role" id="whoRole"></span></div>
+    <div class="actions">
+      <label class="file adminOnly">⬆ Upload Excel<input type="file" id="fileInput" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"></label>
+      <button class="btn light adminOnly" data-act="template">📄 Template</button>
+      <button class="btn light" data-act="export">⬇ Report</button>
+      <button class="btn danger" data-act="logout">Sign out</button>
+    </div>
+    <nav class="tabs adminOnly">
+      <button class="tab active" data-tab="leads">Leads</button>
+      <button class="tab" data-tab="team">Team</button>
+      <button class="tab" data-tab="employees">Employees</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="errBox" class="err hidden"></div>
+
+  <!-- Leads -->
+  <section id="tab-leads">
+    <div class="stats" id="stats"></div>
+    <div class="filters">
+      <input type="search" id="search" placeholder="Search name, number, notes...">
+      <select id="catFilter"></select>
+      <select id="statusFilter">
+        <option value="">All statuses</option>
+        <option>Not Called</option><option>Interested</option><option>Follow Up</option>
+        <option>Not Interested</option><option>No Answer</option><option>Converted</option>
+      </select>
+      <select id="empFilter" class="adminOnly"></select>
+    </div>
+    <div class="bulk adminOnly" id="bulkBar">
+      <label class="chk"><input type="checkbox" id="selAll"> Select all shown</label>
+      <span class="count" id="selCount">0 selected</span>
+      <select id="bulkEmp"></select>
+      <button class="btn" data-act="bulkAssign">Assign</button>
+      <button class="btn light" data-act="openSplit">Split unassigned equally</button>
+      <button class="btn danger" data-act="bulkDelete">Delete</button>
+    </div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <!-- Team (admin) -->
+  <section id="tab-team" class="hidden">
+    <div class="card">
+      <h3>Today's work</h3>
+      <div class="tbl" id="teamTable"></div>
+    </div>
+    <div class="card">
+      <h3>Live activity today</h3>
+      <div class="feed" id="feed"></div>
+    </div>
+  </section>
+
+  <!-- Employees (admin) -->
+  <section id="tab-employees" class="hidden">
+    <div class="card">
+      <h3>Add employee</h3>
+      <div id="empErr" class="err hidden"></div>
+      <form class="formRow" id="empForm">
+        <input id="empName" placeholder="Name" required>
+        <input type="email" id="empEmail" placeholder="Email (their login)" required>
+        <input id="empPass" placeholder="Password (min 6)" minlength="6" required>
+        <button class="btn" type="submit" id="empBtn">Add</button>
+      </form>
+      <div class="meta" style="margin-top:8px">Share the email and password with the employee. They sign in on this same page.</div>
+    </div>
+    <div class="card">
+      <h3>Team members</h3>
+      <div class="tbl" id="empTable"></div>
+    </div>
+  </section>
+</main>
+</div>
+
+<!-- Column mapping -->
+<div class="modal" id="mapModal">
+  <div class="box">
+    <h3>Match your columns</h3>
+    <div class="meta" id="mapInfo" style="margin:-6px 0 12px"></div>
+    <div class="field"><label>Name column</label><select id="mapName"></select></div>
+    <div class="field"><label>Phone number column</label><select id="mapPhone"></select></div>
+    <div class="field"><label>Category column (optional)</label><select id="mapCat"></select></div>
+    <div class="field"><label>Assigned To column (optional – employee name or email)</label><select id="mapAssign"></select></div>
+    <div class="field"><label>Extra info column (optional – area, city…)</label><select id="mapExtra"></select></div>
+    <button class="btn" data-act="doImport" id="mapOk">Add leads</button>
+    <button class="btn light" data-act="closeModal">Cancel</button>
+  </div>
+</div>
+
+<!-- Split modal -->
+<div class="modal" id="splitModal">
+  <div class="box">
+    <h3>Split unassigned leads</h3>
+    <div class="meta" id="splitInfo" style="margin:-6px 0 12px"></div>
+    <div id="splitList"></div>
+    <button class="btn" data-act="doSplit" id="splitOk">Split equally</button>
+    <button class="btn light" data-act="closeModal">Cancel</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, getDoc, updateDoc, writeBatch, query, where,
+  onSnapshot, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// ---------- Firebase ----------
+const firebaseConfig = {
+  apiKey: "AIzaSyCR3hyQL3bqGA60OtB3akWF9WdO6K3b-UQ",
+  authDomain: "slab-87fc9.firebaseapp.com",
+  projectId: "slab-87fc9",
+  storageBucket: "slab-87fc9.firebasestorage.app",
+  messagingSenderId: "750907062090",
+  appId: "1:750907062090:web:e0135e65d29dfb5a5d33b3",
+  measurementId: "G-YWMWC376ZL"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+// Second connection used only to create employee logins, so the admin stays signed in.
+const helperAuth = getAuth(initializeApp(firebaseConfig, "helper"));
+
+// ---------- State ----------
+const STATUSES = ["Not Called","Interested","Follow Up","Not Interested","No Answer","Converted"];
+const PAGE = 150;
+let me = null, isAdmin = false;
+let leads = [], users = [], todayLogs = [];
+let unsubs = [];
+let settingUp = false;
+let quick = "", shown = PAGE, selected = new Set(), pendingRows = [], lastFiltered = [];
+
+// ---------- Helpers ----------
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const iso = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+const today = () => iso(new Date());
+const tomorrow = () => { const d = new Date(); d.setDate(d.getDate()+1); return iso(d); };
+const startOfToday = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
+const cleanPhone = p => String(p ?? "").replace(/[^\d+]/g, "");
+const phoneKey = p => { const d = String(p ?? "").replace(/\D/g, ""); return d.length > 10 ? d.slice(-10) : d; };
+const fmtTime = ts => ts && ts.toDate ? ts.toDate().toLocaleString("en-IN", {day:"numeric", month:"short", hour:"numeric", minute:"2-digit"}) : "";
+const fmtClock = ts => ts && ts.toDate ? ts.toDate().toLocaleTimeString("en-IN", {hour:"numeric", minute:"2-digit"}) : "";
+const employees = () => users.filter(u => u.role === "employee");
+const userName = uid => (users.find(u => u.id === uid) || {}).name || "";
+const isDue = d => d.status === "Follow Up" && d.followUp && d.followUp <= today();
+const friendly = e => {
+  const c = (e && e.code) || "";
+  if (c.includes("invalid-credential") || c.includes("wrong-password") || c.includes("user-not-found")) return "Wrong email or password.";
+  if (c.includes("email-already-in-use")) return "This email already has a login.";
+  if (c.includes("weak-password")) return "Password must be at least 6 characters.";
+  if (c.includes("invalid-email")) return "That email doesn't look right.";
+  if (c.includes("too-many-requests")) return "Too many attempts. Wait a minute and try again.";
+  if (c.includes("permission-denied")) return "Permission denied. Check the Firestore rules are published.";
+  if (c.includes("operation-not-allowed")) return "Email/Password sign-in isn't enabled in Firebase Authentication.";
+  return (e && e.message) || String(e);
+};
+let toastTimer;
+function toast(msg, err){
+  const t = $("toast"); t.textContent = msg; t.className = "toast show" + (err ? " err" : "");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = "toast", err ? 4500 : 1800);
+}
+function showErr(el, msg){ el.textContent = msg; el.classList.toggle("hidden", !msg); }
+function screen(name){
+  ["bootScreen","loginScreen","setupScreen","appScreen"].forEach(s => $(s).classList.toggle("hidden", s !== name));
+}
+const closeMenu = () => document.querySelector("header").classList.remove("open");
+async function commitInChunks(ops){                 // ops: array of (batch) => void
+  for (let i = 0; i < ops.length; i += 400){
+    const b = writeBatch(db);
+    ops.slice(i, i + 400).forEach(fn => fn(b));
+    await b.commit();
+  }
+}
+
+// ---------- Auth flow ----------
+onAuthStateChanged(auth, async user => {
+  if (settingUp) return;
+  unsubs.forEach(u => u()); unsubs = [];
+  me = null; leads = []; users = []; todayLogs = []; selected.clear();
+  if (!user){
+    try{
+      const setup = await getDoc(doc(db, "meta", "setup"));
+      screen(setup.exists() ? "loginScreen" : "setupScreen");
+    }catch(e){
+      screen("loginScreen");
+      showErr($("loginErr"), "Can't reach the database: " + friendly(e));
+    }
+    return;
+  }
+  try{
+    const snap = await getDoc(doc(db, "users", user.uid));
+    if (!snap.exists()){ await signOut(auth); return showErr($("loginErr"), "This login has no profile. Ask your admin to add you."); }
+    me = { id: user.uid, ...snap.data() };
+    if (!me.active){ await signOut(auth); return showErr($("loginErr"), "Your account has been disabled. Contact your admin."); }
+    startApp();
+  }catch(e){
+    await signOut(auth);
+    showErr($("loginErr"), friendly(e));
+  }
+});
+
+$("loginForm").onsubmit = async e => {
+  e.preventDefault(); showErr($("loginErr"), "");
+  $("loginBtn").disabled = true; $("loginBtn").textContent = "Signing in…";
+  try{ await signInWithEmailAndPassword(auth, $("loginEmail").value.trim(), $("loginPass").value); }
+  catch(err){ showErr($("loginErr"), friendly(err)); }
+  $("loginBtn").disabled = false; $("loginBtn").textContent = "Sign in";
+};
+
+$("setupForm").onsubmit = async e => {
+  e.preventDefault(); showErr($("setupErr"), "");
+  $("setupBtn").disabled = true; $("setupBtn").textContent = "Creating…";
+  const name = $("setupName").value.trim(), email = $("setupEmail").value.trim().toLowerCase();
+  settingUp = true;
+  try{
+    const cred = await createUserWithEmailAndPassword(auth, email, $("setupPass").value);
+    const b = writeBatch(db);
+    b.set(doc(db, "users", cred.user.uid), { name, email, role: "admin", active: true, createdAt: serverTimestamp() });
+    b.set(doc(db, "meta", "setup"), { done: true, admin: cred.user.uid, at: serverTimestamp() });
+    await b.commit();
+    location.reload();
+  }catch(err){
+    if (auth.currentUser) await signOut(auth).catch(() => {});
+    settingUp = false;
+    showErr($("setupErr"), friendly(err));
+    $("setupBtn").disabled = false; $("setupBtn").textContent = "Create admin account";
+  }
+};
+
+// ---------- Start ----------
+function startApp(){
+  isAdmin = me.role === "admin";
+  $("whoName").textContent = me.name || me.email;
+  $("whoRole").textContent = isAdmin ? "Admin" : "Caller";
+  document.querySelectorAll(".adminOnly").forEach(el => el.classList.toggle("hidden", !isAdmin));
+  screen("appScreen");
+  switchTab("leads");
+  $("list").innerHTML = `<div class="empty">Loading leads…</div>`;
+
+  const onErr = e => { showErr($("errBox"), "⚠️ " + friendly(e)); };
+  const leadsQ = isAdmin ? collection(db, "leads") : query(collection(db, "leads"), where("assignedTo", "==", me.id));
+  unsubs.push(onSnapshot(leadsQ, s => { leads = s.docs.map(d => ({ id: d.id, ...d.data() })); renderLeads(); if (isAdmin) renderTeam(); }, onErr));
+  if (isAdmin){
+    unsubs.push(onSnapshot(collection(db, "users"), s => {
+      users = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.name||"").localeCompare(b.name||""));
+      renderEmpOptions(); renderEmployees(); renderTeam(); renderLeads();
+    }, onErr));
+    unsubs.push(onSnapshot(query(collection(db, "logs"), where("at", ">=", Timestamp.fromDate(startOfToday()))), s => {
+      todayLogs = s.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderTeam();
+    }, onErr));
+  }
+}
+
+function switchTab(t){
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === t));
+  ["leads","team","employees"].forEach(x => $("tab-" + x).classList.toggle("hidden", x !== t));
+}
+
+// ---------- Leads ----------
+function visiblePool(){
+  const ef = isAdmin ? $("empFilter").value : "";
+  if (ef === "__none") return leads.filter(d => !d.assignedTo);
+  if (ef) return leads.filter(d => d.assignedTo === ef);
+  return leads;
+}
+
+function renderLeads(){
+  const pool = visiblePool();
+  const count = s => pool.filter(d => d.status === s).length;
+  const cards = [
+    ["", "Total", pool.length], ["Not Called","Not Called",count("Not Called")],
+    ["due","Due Today",pool.filter(isDue).length], ["Interested","Interested",count("Interested")],
+    ["Follow Up","Follow Up",count("Follow Up")], ["Not Interested","Not Interested",count("Not Interested")],
+    ["No Answer","No Answer",count("No Answer")], ["Converted","Converted",count("Converted")]
+  ];
+  $("stats").innerHTML = cards.map(([k,l,v]) => `<div class="stat ${quick===k?"active":""}" data-quick="${k}"><b>${v}</b><span>${l}</span></div>`).join("");
+
+  const cats = [...new Set(leads.map(d => d.category).filter(Boolean))].sort();
+  const cf = cats.includes($("catFilter").value) ? $("catFilter").value : "";
+  $("catFilter").innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option ${c===cf?"selected":""}>${esc(c)}</option>`).join("");
+
+  const q = $("search").value.toLowerCase(), sf = $("statusFilter").value;
+  const rows = pool.filter(d => {
+    if (cf && d.category !== cf) return false;
+    if (quick === "due"){ if (!isDue(d)) return false; }
+    else if (sf && d.status !== sf) return false;
+    return !q || [d.name, d.phone, d.notes, d.info, d.category, d.assignedName].join(" ").toLowerCase().includes(q);
+  }).sort((a,b) => {
+    if (isDue(a) !== isDue(b)) return isDue(a) ? -1 : 1;
+    const na = a.status === "Not Called" ? 0 : 1, nb = b.status === "Not Called" ? 0 : 1;
+    if (na !== nb) return na - nb;
+    return (a.order ?? 0) - (b.order ?? 0);
+  });
+  lastFiltered = rows;
+
+  // keep selection only for leads that still exist
+  const ids = new Set(leads.map(l => l.id));
+  [...selected].forEach(id => { if (!ids.has(id)) selected.delete(id); });
+  updateSelCount();
+
+  if (!leads.length){
+    $("list").innerHTML = isAdmin
+      ? `<div class="empty"><h3>No leads yet</h3>Upload an Excel sheet with Name and Phone columns.<br><br>
+         <label class="file">⬆ Upload Excel<input type="file" class="fileAlt" accept=".xlsx,.xls,.csv"></label>
+         &nbsp;<button class="btn light" data-act="template">📄 Template</button></div>`
+      : `<div class="empty"><h3>No leads assigned to you yet</h3>Your admin will assign leads to you. They'll appear here automatically.</div>`;
+    return;
+  }
+  if (!rows.length){ $("list").innerHTML = `<div class="empty">No leads match this filter.</div>`; return; }
+
+  const empOpts = cur => `<option value="">— Unassigned —</option>` +
+    employees().map(u => `<option value="${esc(u.id)}" ${u.id===cur?"selected":""}>${esc(u.name)}${u.active?"":" (disabled)"}</option>`).join("");
+
+  $("list").innerHTML = rows.slice(0, shown).map(d => {
+    const due = isDue(d);
+    return `<div class="row s-${esc((d.status||"").split(" ")[0])} ${due?"due":""} ${isAdmin?"admin":""} ${selected.has(d.id)?"sel":""}" data-id="${esc(d.id)}">
+      ${isAdmin ? `<div class="adm"><input type="checkbox" data-act="sel" ${selected.has(d.id)?"checked":""} style="width:20px;height:20px;min-height:auto">
+        <select data-act="assign" title="Assigned to">${empOpts(d.assignedTo)}</select></div>` : ""}
+      <div class="info">
+        <div class="name">${esc(d.name)}${d.category?`<span class="cat">${esc(d.category)}</span>`:""} ${due?'<span class="tag">⏰ Follow-up due</span>':""}</div>
+        <div class="meta">${esc(d.phone)}${d.info?" · "+esc(d.info):""}</div>
+        ${d.lastCalled?`<div class="meta">Last: ${esc(fmtTime(d.lastCalled))}${d.calledByName?" by "+esc(d.calledByName):""}</div>`:""}
+      </div>
+      <a class="call" href="tel:${esc(d.phone)}" data-act="call">📞 Call</a>
+      <select class="st" data-act="status">${STATUSES.map(s => `<option ${s===d.status?"selected":""}>${s}</option>`).join("")}</select>
+      <input class="dt" type="date" data-act="followUp" title="Follow-up date" value="${esc(d.followUp)}">
+      <input class="nt" data-act="notes" placeholder="Notes..." value="${esc(d.notes)}">
+    </div>`;
+  }).join("") + (rows.length > shown ? `<button class="btn light more" data-act="more">Show more (${rows.length - shown} left)</button>` : "");
+}
+
+function updateSelCount(){
+  $("selCount").textContent = `${selected.size} selected`;
+  $("selAll").checked = lastFiltered.length > 0 && lastFiltered.every(d => selected.has(d.id));
+}
+
+function renderEmpOptions(){
+  const emps = employees();
+  const cur = $("empFilter").value;
+  $("empFilter").innerHTML = `<option value="">All employees</option><option value="__none">Unassigned</option>` +
+    emps.map(u => `<option value="${esc(u.id)}" ${u.id===cur?"selected":""}>${esc(u.name)}</option>`).join("");
+  $("bulkEmp").innerHTML = `<option value="">Assign to…</option><option value="__none">— Unassign —</option>` +
+    emps.filter(u => u.active).map(u => `<option value="${esc(u.id)}">${esc(u.name)}</option>`).join("");
+}
+
+// ---------- Saving a lead ----------
+async function saveLead(id, changes, logAction){
+  const lead = leads.find(l => l.id === id); if (!lead) return;
+  const b = writeBatch(db);
+  const data = { ...changes, updatedAt: serverTimestamp() };
+  if (logAction){ Object.assign(data, { lastCalled: serverTimestamp(), calledBy: me.id, calledByName: me.name || me.email }); }
+  b.update(doc(db, "leads", id), data);
+  if (logAction){
+    b.set(doc(collection(db, "logs")), {
+      at: serverTimestamp(), uid: me.id, userName: me.name || me.email, leadId: id, leadName: lead.name, phone: lead.phone,
+      action: logAction, status: changes.status ?? lead.status
+    });
+  }
+  try{ await b.commit(); if (logAction !== "Called") toast("Saved ✓"); }
+  catch(e){ toast("Not saved: " + friendly(e), true); }
+}
+
+// ---------- Upload ----------
+function readFile(input){
+  const f = input.files[0]; if (!f) return;
+  closeMenu();
+  if (typeof XLSX === "undefined"){ input.value = ""; return toast("The Excel reader didn't load. Check internet and reload.", true); }
+  const r = new FileReader();
+  r.onerror = () => toast("Couldn't read that file.", true);
+  r.onload = ev => {
+    try{
+      const wb = XLSX.read(ev.target.result, { type: "array" });
+      pendingRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+      if (!pendingRows.length) return toast("The first sheet looks empty.", true);
+      const cols = Object.keys(pendingRows[0]);
+      const guess = re => cols.find(c => re.test(c)) || "";
+      const opts = (sel, none) => (none ? '<option value="">— none —</option>' : "") + cols.map(c => `<option ${c===sel?"selected":""}>${esc(c)}</option>`).join("");
+      $("mapName").innerHTML   = opts(guess(/name/i) || cols[0]);
+      $("mapPhone").innerHTML  = opts(guess(/phone|mobile|number|contact|cell/i) || cols[1] || cols[0]);
+      $("mapCat").innerHTML    = opts(guess(/categ|type|business|industry|segment/i), true);
+      $("mapAssign").innerHTML = opts(guess(/assign|caller|agent|owner|employee/i), true);
+      $("mapExtra").innerHTML  = opts(guess(/area|city|location|company|info|product/i), true);
+      $("mapInfo").textContent = `${pendingRows.length} rows found in “${f.name}”.`;
+      $("mapModal").classList.add("show");
+    }catch(err){ toast("Couldn't open this Excel file: " + (err.message || err), true); }
+  };
+  r.readAsArrayBuffer(f);
+  input.value = "";
+}
+
+async function doImport(){
+  const n = $("mapName").value, p = $("mapPhone").value, c = $("mapCat").value, a = $("mapAssign").value, x = $("mapExtra").value;
+  const existing = new Set(leads.map(l => l.id));
+  const emps = employees();
+  const findEmp = v => { const s = String(v || "").trim().toLowerCase(); if (!s) return null;
+    return emps.find(u => (u.email || "").toLowerCase() === s || (u.name || "").trim().toLowerCase() === s) || null; };
+  let order = leads.reduce((m, l) => Math.max(m, l.order || 0), 0);
+  const ops = []; let skipped = 0, unmatched = new Set();
+  pendingRows.forEach(row => {
+    const phone = cleanPhone(row[p]); const key = phoneKey(phone);
+    if (!key || key.length < 6 || existing.has(key)){ skipped++; return; }
+    existing.add(key);
+    const emp = a ? findEmp(row[a]) : null;
+    if (a && row[a] && !emp) unmatched.add(String(row[a]).trim());
+    const data = {
+      name: String(row[n] || "Unknown").trim(), phone, category: c ? String(row[c] || "").trim() : "",
+      info: x ? String(row[x] || "").trim() : "", assignedTo: emp ? emp.id : "", assignedName: emp ? emp.name : "",
+      status: "Not Called", followUp: "", notes: "", lastCalled: null, calledBy: "", calledByName: "",
+      order: ++order, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    };
+    ops.push(b => b.set(doc(db, "leads", key), data));
+  });
+  $("mapOk").disabled = true; $("mapOk").textContent = `Adding ${ops.length}…`;
+  try{
+    await commitInChunks(ops);
+    $("mapModal").classList.remove("show");
+    toast(`${ops.length} leads added${skipped ? `, ${skipped} skipped (duplicate or no number)` : ""}`);
+    if (unmatched.size) showErr($("errBox"), `⚠️ These “Assigned To” names didn't match any employee, so those leads are unassigned: ${[...unmatched].join(", ")}. Add the employee first (same name or email), or assign them from the list.`);
+  }catch(e){ toast("Upload failed: " + friendly(e), true); }
+  $("mapOk").disabled = false; $("mapOk").textContent = "Add leads";
+}
+
+// ---------- Bulk actions ----------
+async function assignMany(ids, empId){
+  const emp = users.find(u => u.id === empId);
+  const ops = ids.map(id => b => b.update(doc(db, "leads", id), { assignedTo: emp ? emp.id : "", assignedName: emp ? emp.name : "", updatedAt: serverTimestamp() }));
+  await commitInChunks(ops);
+}
+
+function openSplit(){
+  const un = lastFiltered.filter(d => !d.assignedTo);
+  const act = employees().filter(u => u.active);
+  if (!un.length) return toast("No unassigned leads in the current list.", true);
+  if (!act.length) return toast("Add employees first (Employees tab).", true);
+  $("splitInfo").textContent = `${un.length} unassigned leads in the current list will be shared equally, best leads spread evenly.`;
+  $("splitList").innerHTML = act.map(u => `<label class="chk" style="padding:8px 0"><input type="checkbox" value="${esc(u.id)}" checked> ${esc(u.name)}</label>`).join("");
+  $("splitModal").classList.add("show");
+}
+async function doSplit(){
+  const ids = [...$("splitList").querySelectorAll("input:checked")].map(i => i.value);
+  if (!ids.length) return toast("Pick at least one employee.", true);
+  const un = lastFiltered.filter(d => !d.assignedTo);
+  const ops = un.map((d, i) => {                       // snake order: 1-2-3-3-2-1 …
+    const round = Math.floor(i / ids.length), pos = i % ids.length;
+    const emp = users.find(u => u.id === ids[round % 2 ? ids.length - 1 - pos : pos]);
+    return b => b.update(doc(db, "leads", d.id), { assignedTo: emp.id, assignedName: emp.name, updatedAt: serverTimestamp() });
+  });
+  $("splitOk").disabled = true;
+  try{ await commitInChunks(ops); $("splitModal").classList.remove("show"); toast(`${ops.length} leads split between ${ids.length} employees`); }
+  catch(e){ toast(friendly(e), true); }
+  $("splitOk").disabled = false;
+}
+
+// ---------- Team ----------
+function renderTeam(){
+  if (!isAdmin) return;
+  const t = today();
+  const rows = employees().map(u => {
+    const mine = leads.filter(l => l.assignedTo === u.id);
+    const logs = todayLogs.filter(l => l.uid === u.id);
+    const times = logs.map(l => l.at).filter(Boolean).sort((a,b) => a.toMillis() - b.toMillis());
+    return { u, assigned: mine.length, pending: mine.filter(l => l.status === "Not Called").length,
+      calls: logs.filter(l => l.action === "Called").length, updates: logs.filter(l => l.action !== "Called").length,
+      interested: mine.filter(l => l.status === "Interested").length, converted: mine.filter(l => l.status === "Converted").length,
+      due: mine.filter(isDue).length, first: times[0], last: times[times.length - 1] };
+  });
+  $("teamTable").innerHTML = !rows.length ? `<div class="meta">No employees yet. Add them in the Employees tab.</div>` :
+    `<table><tr><th>Employee</th><th class="n">Calls today</th><th class="n">Updates today</th><th>Active today</th>
+      <th class="n">Assigned</th><th class="n">Not called</th><th class="n">Follow-ups due</th><th class="n">Interested</th><th class="n">Converted</th></tr>` +
+    rows.map(r => `<tr><td><b>${esc(r.u.name)}</b>${r.u.active?"":' <span class="pill off">disabled</span>'}</td>
+      <td class="n">${r.calls}</td><td class="n">${r.updates}</td>
+      <td>${r.first ? esc(fmtClock(r.first)) + " – " + esc(fmtClock(r.last)) : '<span class="meta">No activity</span>'}</td>
+      <td class="n">${r.assigned}</td><td class="n">${r.pending}</td><td class="n">${r.due}</td><td class="n">${r.interested}</td><td class="n">${r.converted}</td></tr>`).join("") + `</table>`;
+  const feed = [...todayLogs].filter(l => l.at).sort((a,b) => b.at.toMillis() - a.at.toMillis()).slice(0, 80);
+  $("feed").innerHTML = !feed.length ? `<div class="meta">Nothing yet today.</div>` :
+    feed.map(l => `<div><b>${esc(fmtClock(l.at))}</b> · ${esc(l.userName)} — ${esc(l.action)} · ${esc(l.leadName)} <span class="meta">${esc(l.phone)}</span></div>`).join("");
+}
+
+// ---------- Employees ----------
+function renderEmployees(){
+  if (!isAdmin) return;
+  $("empTable").innerHTML = `<table><tr><th>Name</th><th>Email</th><th>Role</th><th class="n">Leads</th><th>Status</th><th></th></tr>` +
+    users.map(u => `<tr data-uid="${esc(u.id)}"><td><b>${esc(u.name)}</b></td><td>${esc(u.email)}</td><td>${u.role === "admin" ? "Admin" : "Employee"}</td>
+      <td class="n">${leads.filter(l => l.assignedTo === u.id).length}</td>
+      <td><span class="pill ${u.active?"on":"off"}">${u.active?"Active":"Disabled"}</span></td>
+      <td>${u.id === me.id ? "" : `<button class="btn light" data-act="toggleUser">${u.active?"Disable":"Enable"}</button>
+        <button class="btn light" data-act="resetPass">Reset password</button>`}</td></tr>`).join("") + `</table>`;
+}
+
+$("empForm").onsubmit = async e => {
+  e.preventDefault(); showErr($("empErr"), "");
+  const name = $("empName").value.trim(), email = $("empEmail").value.trim().toLowerCase(), pass = $("empPass").value;
+  $("empBtn").disabled = true; $("empBtn").textContent = "Adding…";
+  try{
+    const cred = await createUserWithEmailAndPassword(helperAuth, email, pass);
+    await signOut(helperAuth);
+    const b = writeBatch(db);
+    b.set(doc(db, "users", cred.user.uid), { name, email, role: "employee", active: true, createdAt: serverTimestamp() });
+    await b.commit();
+    $("empForm").reset();
+    toast(`${name} added. Login: ${email}`);
+  }catch(err){ showErr($("empErr"), friendly(err)); }
+  $("empBtn").disabled = false; $("empBtn").textContent = "Add";
+};
+
+// ---------- Export / template ----------
+function exportReport(){
+  closeMenu();
+  if (!leads.length) return toast("Nothing to download yet.", true);
+  const out = leads.map(d => ({ Name: d.name, Phone: d.phone, Category: d.category, Info: d.info, "Assigned To": d.assignedName,
+    Status: d.status, "Follow-up Date": d.followUp, Notes: d.notes, "Last Called": fmtTime(d.lastCalled), "Called By": d.calledByName }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out), "Leads");
+  if (isAdmin && todayLogs.length){
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([...todayLogs].filter(l => l.at).sort((a,b) => a.at.toMillis() - b.at.toMillis())
+      .map(l => ({ Time: fmtTime(l.at), Employee: l.userName, Action: l.action, Lead: l.leadName, Phone: l.phone }))), "Today's activity");
+  }
+  XLSX.writeFile(wb, `call-report-${today()}.xlsx`);
+}
+function downloadTemplate(){
+  closeMenu();
+  const ws = XLSX.utils.json_to_sheet([
+    { Name: "Rahul Sharma", Phone: "9876543210", Category: "Gym", "Assigned To": "Employee name or email", Area: "Kothrud" },
+    { Name: "Priya Patel", Phone: "9823456781", Category: "Cafe", "Assigned To": "", Area: "Baner" }
+  ]);
+  ws["!cols"] = [{wch:24},{wch:16},{wch:14},{wch:26},{wch:14}];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Leads");
+  XLSX.writeFile(wb, "caller-tracker-template.xlsx");
+}
+
+// ---------- Events ----------
+document.addEventListener("click", async e => {
+  const quickEl = e.target.closest("[data-quick]");
+  if (quickEl){ quick = quickEl.dataset.quick; $("statusFilter").value = quick === "due" ? "" : quick; shown = PAGE; return renderLeads(); }
+  const tab = e.target.closest("[data-tab]");
+  if (tab) return switchTab(tab.dataset.tab);
+  if (e.target.closest(".modal") === e.target) return e.target.classList.remove("show");
+  const el = e.target.closest("[data-act]"); if (!el) return;
+  const act = el.dataset.act;
+  const id = el.closest("[data-id]")?.dataset.id;
+  switch (act){
+    case "call":
+      saveLead(id, {}, "Called");             // the tel: link still opens the dialer
+      break;
+    case "more": shown += PAGE; renderLeads(); break;
+    case "logout": closeMenu(); await signOut(auth); location.reload(); break;
+    case "export": exportReport(); break;
+    case "template": downloadTemplate(); break;
+    case "doImport": doImport(); break;
+    case "closeModal": el.closest(".modal").classList.remove("show"); break;
+    case "openSplit": openSplit(); break;
+    case "doSplit": doSplit(); break;
+    case "bulkAssign": {
+      const v = $("bulkEmp").value;
+      if (!selected.size) return toast("Select some leads first.", true);
+      if (!v) return toast("Choose who to assign to.", true);
+      try{ await assignMany([...selected], v === "__none" ? "" : v); toast(`${selected.size} leads ${v === "__none" ? "unassigned" : "assigned to " + userName(v)}`); selected.clear(); renderLeads(); }
+      catch(err){ toast(friendly(err), true); }
+      break;
+    }
+    case "bulkDelete": {
+      if (!selected.size) return toast("Select some leads first.", true);
+      if (!confirm(`Delete ${selected.size} leads permanently?`)) return;
+      try{ await commitInChunks([...selected].map(i => b => b.delete(doc(db, "leads", i)))); toast("Deleted"); selected.clear(); }
+      catch(err){ toast(friendly(err), true); }
+      break;
+    }
+    case "toggleUser": {
+      const uid = el.closest("[data-uid]").dataset.uid; const u = users.find(x => x.id === uid);
+      try{ await updateDoc(doc(db, "users", uid), { active: !u.active }); toast(`${u.name} ${u.active ? "disabled" : "enabled"}`); }
+      catch(err){ toast(friendly(err), true); }
+      break;
+    }
+    case "resetPass": {
+      const uid = el.closest("[data-uid]").dataset.uid; const u = users.find(x => x.id === uid);
+      try{ await sendPasswordResetEmail(auth, u.email); toast(`Password reset email sent to ${u.email}`); }
+      catch(err){ toast(friendly(err), true); }
+      break;
+    }
+  }
+});
+
+document.addEventListener("change", e => {
+  const el = e.target;
+  if (el.id === "fileInput" || el.classList.contains("fileAlt")) return readFile(el);
+  if (el.id === "selAll"){ lastFiltered.forEach(d => el.checked ? selected.add(d.id) : selected.delete(d.id)); return renderLeads(); }
+  if (["catFilter","empFilter"].includes(el.id)){ shown = PAGE; selected.clear(); return renderLeads(); }
+  if (el.id === "statusFilter"){ quick = el.value; shown = PAGE; return renderLeads(); }
+  const act = el.dataset.act; if (!act) return;
+  const id = el.closest("[data-id]")?.dataset.id; if (!id) return;
+  const lead = leads.find(l => l.id === id);
+  if (act === "sel"){ el.checked ? selected.add(id) : selected.delete(id); el.closest(".row").classList.toggle("sel", el.checked); return updateSelCount(); }
+  if (act === "assign"){ assignMany([id], el.value).then(() => toast(el.value ? `Assigned to ${userName(el.value)}` : "Unassigned")).catch(err => toast(friendly(err), true)); return; }
+  if (act === "status"){
+    const ch = { status: el.value };
+    if (el.value === "Follow Up" && !lead.followUp) ch.followUp = tomorrow();
+    return saveLead(id, ch, "Status: " + el.value);
+  }
+  if (act === "followUp") return saveLead(id, { followUp: el.value });
+  if (act === "notes") return saveLead(id, { notes: el.value });
+});
+
+$("search").addEventListener("input", () => { shown = PAGE; renderLeads(); });
+$("menuBtn").onclick = () => document.querySelector("header").classList.toggle("open");
+$("errBox").onclick = () => showErr($("errBox"), "");
+$("errBox").title = "Tap to dismiss";
+</script>
+</body>
+</html>
